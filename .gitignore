@@ -1,0 +1,119 @@
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.installed.cfg
+develop-eggs/
+eggs/
+.eggs/
+build/
+dist/
+sdist/
+downloads/
+wheels/
+lib/
+lib64/
+parts/
+var/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ========================
+# Virtual Environments
+# ========================
+.venv/
+venv/
+env/
+ENV/
+.env.*/
+!.env.example
+
+# ========================
+# Environment Variables
+# ========================
+.env
+.env.local
+.env.production
+.env.staging
+
+# ========================
+# IDE & Editors
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+*.sublime-project
+*.sublime-workspace
+.spyderproject
+.spyproject
+.ropeproject
+
+# ========================
+# OS Generated Files
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ========================
+# Testing & Coverage
+# ========================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ========================
+# Distribution & Packaging
+# ========================
+*.tar.gz
+*.whl
+
+# ========================
+# Logs
+# ========================
+logs/
+*.log
+
+# ========================
+# Docker
+# ========================
+docker-compose.override.yml
+
+# ========================
+# Misc
+# ========================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+celerybeat-schedule
+celerybeat.pid
+*.sage.py
