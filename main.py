@@ -3,11 +3,12 @@ Email Parser API
 Parse emails and extract structured data as JSON.
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import email
 import base64
+import time
 
 app = FastAPI(
     title="Email Parser API",
@@ -26,6 +27,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    latency_ms = process_time * 1000
+    
+    # Add custom header for monitoring
+    response.headers["X-Process-Time"] = f"{process_time:.4f}"
+    
+    # Print the latency to the console where uvicorn is running
+    print(f"[{request.method}] {request.url.path} - Latency: {latency_ms:.2f} ms")
+    
+    return response
+
 
 
 class ParseResponse(BaseModel):
@@ -39,17 +55,22 @@ class EmailRequest(BaseModel):
     is_base64: bool = False
 
 
-def parse_email_content(email_content: str, is_base64: bool = False) -> dict:
+def parse_email_content(email_content, is_base64: bool = False) -> dict:
     """
     Parse email content and extract structured data.
     """
     try:
         # Decode if base64
         if is_base64:
-            email_content = base64.b64decode(email_content).decode('utf-8', errors='ignore')
-
-        # Parse the email
-        msg = email.message_from_string(email_content)
+            if isinstance(email_content, str):
+                msg = email.message_from_bytes(base64.b64decode(email_content))
+            else:
+                msg = email.message_from_bytes(base64.b64decode(email_content))
+        else:
+            if isinstance(email_content, bytes):
+                msg = email.message_from_bytes(email_content)
+            else:
+                msg = email.message_from_string(email_content)
 
         # Extract headers
         headers = {}
@@ -72,53 +93,77 @@ def parse_email_content(email_content: str, is_base64: bool = False) -> dict:
 
         # Extract body (text and HTML)
         body = {'text': None, 'html': None}
+        attachments = []
+        is_multipart = msg.is_multipart()
+        parts_count = 1
 
-        if msg.is_multipart():
-            for part in msg.walk():
+        if is_multipart:
+            parts = list(msg.walk())
+            parts_count = len(parts)
+            for part in parts:
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition"))
 
-                if content_type == "text/plain" and "attachment" not in content_disposition:
-                    try:
-                        body['text'] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                    except:
-                        pass
-                elif content_type == "text/html" and "attachment" not in content_disposition:
-                    try:
-                        body['html'] = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                    except:
-                        pass
+                is_attachment = part.get_content_disposition() == 'attachment' or "attachment" in content_disposition
+
+                if is_attachment:
+                    filename = part.get_filename()
+                    if filename:
+                        # Optimization: Avoid decoding entire base64 payload just to get size
+                        raw_payload = part.get_payload()
+                        size = 0
+                        if raw_payload:
+                            if part.get("Content-Transfer-Encoding", "").lower() == "base64" and isinstance(raw_payload, str):
+                                # Approximate size of base64 decoded payload without strict decoding
+                                b_len = len(raw_payload.strip())
+                                size = (b_len * 3) // 4
+                                if raw_payload.endswith("=="): size -= 2
+                                elif raw_payload.endswith("="): size -= 1
+                            else:
+                                size = len(raw_payload)
+                        attachments.append({
+                            'filename': filename,
+                            'content_type': content_type,
+                            'size': size
+                        })
+                else:
+                    if content_type == "text/plain":
+                        try:
+                            payload = part.get_payload(decode=True)
+                            if payload is not None:
+                                body['text'] = payload.decode('utf-8', errors='ignore')
+                        except:
+                            pass
+                    elif content_type == "text/html":
+                        try:
+                            payload = part.get_payload(decode=True)
+                            if payload is not None:
+                                body['html'] = payload.decode('utf-8', errors='ignore')
+                        except:
+                            pass
         else:
             content_type = msg.get_content_type()
             if content_type == "text/plain":
                 try:
-                    body['text'] = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
+                    payload = msg.get_payload(decode=True)
+                    if payload is not None:
+                        body['text'] = payload.decode('utf-8', errors='ignore')
                 except:
                     pass
             elif content_type == "text/html":
                 try:
-                    body['html'] = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
+                    payload = msg.get_payload(decode=True)
+                    if payload is not None:
+                        body['html'] = payload.decode('utf-8', errors='ignore')
                 except:
                     pass
-
-        # Extract attachments
-        attachments = []
-        for part in msg.walk():
-            if part.get_content_disposition() == 'attachment':
-                filename = part.get_filename()
-                if filename:
-                    attachments.append({
-                        'filename': filename,
-                        'content_type': part.get_content_type(),
-                        'size': len(part.get_payload(decode=True)) if part.get_payload() else 0
-                    })
 
         return {
             'headers': headers,
             'body': body,
             'attachments': attachments,
-            'is_multipart': msg.is_multipart(),
-            'parts_count': len(list(msg.walk())) if msg.is_multipart() else 1
+            'is_multipart': is_multipart,
+            'parts_count': parts_count
         }
 
     except Exception as e:
@@ -184,8 +229,8 @@ async def parse_email_file(
     """
     try:
         content = await file.read()
-        email_content = content.decode('utf-8', errors='ignore')
-        parsed_data = parse_email_content(email_content, is_base64=False)
+        # Pass bytes directly to avoid string decoding overhead for large files
+        parsed_data = parse_email_content(content, is_base64=False)
         return ParseResponse(
             success=True,
             data=parsed_data,
