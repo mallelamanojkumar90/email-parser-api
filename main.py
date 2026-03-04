@@ -3,15 +3,11 @@ Email Parser API
 Parse emails and extract structured data as JSON.
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from pydantic import BaseModel
 import email
 import base64
-import io
-from datetime import datetime
 
 app = FastAPI(
     title="Email Parser API",
@@ -30,16 +26,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rate limiting configuration
-FREE_TIER_LIMIT = 100  # requests per day
-BASIC_TIER_LIMIT = 1000
-PRO_TIER_LIMIT = 10000
 
 
 class ParseResponse(BaseModel):
     success: bool
     data: dict
     message: str
+
+
+class EmailRequest(BaseModel):
+    email_content: str
+    is_base64: bool = False
 
 
 def parse_email_content(email_content: str, is_base64: bool = False) -> dict:
@@ -150,20 +147,17 @@ async def health():
 
 
 @app.post("/parse", response_model=ParseResponse, tags=["Email Parsing"])
-async def parse_email(
-    email_content: str = Form(..., description="Raw email content or base64 encoded email"),
-    is_base64: bool = Form(False, description="Set to true if email_content is base64 encoded")
-):
+async def parse_email(request: EmailRequest):
     """
     Parse an email and return structured JSON data.
 
-    Accepts raw email content (RFC 822 format) and extracts:
+    Accepts JSON containing raw email content (RFC 822 format) and extracts:
     - Headers (from, to, subject, date, etc.)
     - Body (both text and HTML)
     - Attachments (list of files with metadata)
     """
     try:
-        parsed_data = parse_email_content(email_content, is_base64)
+        parsed_data = parse_email_content(request.email_content, request.is_base64)
         return ParseResponse(
             success=True,
             data=parsed_data,

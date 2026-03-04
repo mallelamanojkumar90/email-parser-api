@@ -27,7 +27,6 @@ A fast, lightweight **FastAPI-based** email parsing service that extracts struct
 | Uvicorn           | 0.32.0   | ASGI server                |
 | Pydantic          | 2.9.2    | Data validation            |
 | python-multipart  | 0.0.9    | File upload support        |
-| email-validator   | 2.2.0    | Email address validation   |
 
 ---
 
@@ -101,7 +100,7 @@ docker run -p 8000:8000 email-parser-api
 docker-compose up -d
 ```
 
-This mounts a `./logs` directory and configures automatic restart.
+This configures automatic restart for your parsing service.
 
 ---
 
@@ -152,7 +151,7 @@ curl http://localhost:8000/health
 
 Parse an email from raw RFC 822 content.
 
-**Parameters (form-data):**
+**Parameters (JSON payload):**
 
 | Field           | Type    | Required | Description                                   |
 | --------------- | ------- | -------- | --------------------------------------------- |
@@ -163,13 +162,10 @@ Parse an email from raw RFC 822 content.
 
 ```bash
 curl -X POST "http://localhost:8000/parse" \
-  -H "Content-Type: multipart/form-data" \
-  -F 'email_content=From: sender@example.com
-To: recipient@example.com
-Subject: Test Email
-
-This is the email body.'
+  -H "Content-Type: application/json" \
+  -d '{"email_content": "From: sender@example.com\nTo: recipient@example.com\nSubject: Test Email\n\nThis is the email body."}'
 ```
+
 
 ---
 
@@ -257,13 +253,8 @@ curl -X POST "http://localhost:8000/parse/file" \
 
 ```bash
 curl -X POST "http://localhost:8000/parse" \
-  -H "Content-Type: multipart/form-data" \
-  -F 'email_content=From: test@example.com
-To: user@example.com
-Subject: Hello World
-Date: Mon, 02 Mar 2026 11:00:00 +0530
-
-This is a test email body.'
+  -H "Content-Type: application/json" \
+  -d '{"email_content": "From: test@example.com\nTo: user@example.com\nSubject: Hello World\nDate: Mon, 02 Mar 2026 11:00:00 +0530\n\nThis is a test email body."}'
 ```
 
 ### Using Base64-Encoded Content
@@ -273,8 +264,8 @@ This is a test email body.'
 ENCODED=$(echo -n "From: test@example.com\nTo: user@example.com\nSubject: Test\n\nBody" | base64)
 
 curl -X POST "http://localhost:8000/parse" \
-  -F "email_content=$ENCODED" \
-  -F "is_base64=true"
+  -H "Content-Type: application/json" \
+  -d "{\"email_content\": \"$ENCODED\", \"is_base64\": true}"
 ```
 
 ---
